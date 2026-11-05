@@ -7,6 +7,7 @@ pub struct Style {
     pub underline: bool,
     pub strike: bool,
     pub dim: bool,
+    pub reverse: bool,
     pub fg: Option<u8>,
 }
 
@@ -18,6 +19,7 @@ impl Style {
             underline: self.underline || other.underline,
             strike: self.strike || other.strike,
             dim: self.dim || other.dim,
+            reverse: self.reverse || other.reverse,
             fg: other.fg.or(self.fg),
         }
     }
@@ -28,6 +30,7 @@ impl Style {
             || self.underline
             || self.strike
             || self.dim
+            || self.reverse
             || self.fg.is_some())
     }
 
@@ -50,6 +53,9 @@ impl Style {
         if self.underline {
             params.push("4".to_string());
         }
+        if self.reverse {
+            params.push("7".to_string());
+        }
         if self.strike {
             params.push("9".to_string());
         }
@@ -65,6 +71,7 @@ const fn st(
     dim: bool,
     italic: bool,
     underline: bool,
+    reverse: bool,
     strike: bool,
     fg: Option<u8>,
 ) -> Style {
@@ -74,23 +81,26 @@ const fn st(
         underline,
         strike,
         dim,
+        reverse,
         fg,
     }
 }
 
-pub const BOLD: Style = st(true, false, false, false, false, None);
-pub const ITALIC: Style = st(false, false, true, false, false, None);
-pub const STRIKE: Style = st(false, false, false, false, true, None);
-pub const CODE: Style = st(false, false, false, false, false, Some(93));
-pub const LINK: Style = st(false, false, false, true, false, Some(94));
-pub const H1: Style = st(true, false, false, true, false, Some(94));
-pub const H2: Style = st(true, false, false, false, false, Some(96));
-pub const H3: Style = st(true, false, false, false, false, Some(95));
-pub const H4: Style = st(true, false, false, false, false, None);
-pub const QUOTE: Style = st(false, true, false, false, false, None);
-pub const RULE: Style = st(false, false, false, false, false, Some(90));
-pub const CODE_BLOCK: Style = st(false, true, false, false, false, None);
-pub const TABLE_HEAD: Style = st(true, false, false, false, false, None);
+pub const BOLD: Style = st(true, false, false, false, false, false, None);
+pub const ITALIC: Style = st(false, false, true, false, false, false, None);
+pub const STRIKE: Style = st(false, false, false, false, false, true, None);
+/// Reverse video rather than a colour: it contrasts on light and dark
+/// terminals alike, and inline code is too common to risk low contrast.
+pub const CODE: Style = st(false, false, false, false, true, false, None);
+pub const LINK: Style = st(false, false, false, true, false, false, Some(94));
+pub const H1: Style = st(true, false, false, true, false, false, Some(94));
+pub const H2: Style = st(true, false, false, false, false, false, Some(35));
+pub const H3: Style = st(true, false, false, false, false, false, Some(34));
+pub const H4: Style = st(true, false, false, false, false, false, None);
+pub const QUOTE: Style = st(false, true, false, false, false, false, None);
+pub const RULE: Style = st(false, false, false, false, false, false, Some(90));
+pub const CODE_BLOCK: Style = st(false, true, false, false, false, false, None);
+pub const TABLE_HEAD: Style = st(true, false, false, false, false, false, None);
 
 #[cfg(test)]
 mod tests {
@@ -118,16 +128,22 @@ mod tests {
     }
 
     #[test]
+    fn inline_code_is_reverse_video() {
+        assert_eq!(CODE.apply("x", true), "\x1b[7mx\x1b[0m");
+    }
+
+    #[test]
     fn sgr_parameter_order_is_fixed() {
         let s = Style {
             bold: true,
             dim: true,
             italic: true,
             underline: true,
+            reverse: true,
             strike: true,
             fg: Some(31),
         };
-        assert_eq!(s.apply("x", true), "\x1b[1;2;3;4;9;31mx\x1b[0m");
+        assert_eq!(s.apply("x", true), "\x1b[1;2;3;4;7;9;31mx\x1b[0m");
     }
 
     #[test]

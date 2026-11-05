@@ -145,7 +145,14 @@ fn render_table(header: &[String], rows: &[Vec<String>], ctx: &Ctx) -> String {
     }
     out.push_str(&render_row(header, &widths, style::TABLE_HEAD, ctx));
     out.push('\n');
-    let separator: Vec<String> = widths.iter().map(|w| "─".repeat(w + 2)).collect();
+    // Each segment takes its column width plus the space on either side of the
+    // `│` it meets, so the `┼` sits exactly under that `│` and the rule is as
+    // wide as the row it underlines.
+    let separator: Vec<String> = widths
+        .iter()
+        .enumerate()
+        .map(|(i, w)| "─".repeat(w + usize::from(i > 0) + usize::from(i + 1 < cols)))
+        .collect();
     out.push_str(&separator.join("┼"));
     out.push('\n');
     for row in rows {
@@ -195,12 +202,17 @@ fn clamp_spans(spans: &[Span], width: usize) -> (Vec<Span>, bool, usize) {
     };
     let mut out: Vec<Span> = Vec::new();
     let mut used = 0;
-    'outer: for span in spans {
+    let mut cut = false;
+    for span in spans {
+        if cut {
+            break;
+        }
         let mut text = String::new();
         for ch in span.text.chars() {
             let w = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
             if used + w > limit {
-                break 'outer;
+                cut = true;
+                break;
             }
             used += w;
             text.push(ch);
@@ -359,7 +371,7 @@ mod tests {
     fn table_pads_columns_and_underlines_the_header() {
         assert_eq!(
             r("| a | b |\n|---|---|\n| 1 | 22 |", 40),
-            "a │ b\n───┼────\n1 │ 22\n"
+            "a │ b\n──┼───\n1 │ 22\n"
         );
     }
 
@@ -367,7 +379,7 @@ mod tests {
     fn table_width_counts_wide_chars() {
         assert_eq!(
             r("| 中 | b |\n|---|---|\n| x | y |", 40),
-            "中 │ b\n────┼───\nx  │ y\n"
+            "中 │ b\n───┼──\nx  │ y\n"
         );
     }
 
@@ -378,5 +390,32 @@ mod tests {
             out.lines().all(|l| crate::wrap::display_width(l) <= 8),
             "got {out:?}"
         );
+    }
+
+    #[test]
+    fn table_rule_aligns_with_the_columns() {
+        let out = r("| a | b |\n|---|---|\n| 1 | 22 |", 40);
+        let lines: Vec<&str> = out.lines().collect();
+        assert_eq!(lines[0], "a │ b");
+        assert_eq!(lines[1], "──┼───");
+    }
+
+    #[test]
+    fn table_rule_never_exceeds_the_width_after_shrinking() {
+        let out = r(
+            "| aaaaaaaaaaaaaaaaaaaaaa | bbbbbbbbbbbbbbbbbbbbbb |\n|---|---|\n| c | d |",
+            40,
+        );
+        let widths: Vec<usize> = out.lines().map(crate::wrap::display_width).collect();
+        assert!(widths.iter().all(|w| *w <= 40), "got {widths:?}");
+        assert_eq!(widths[0], widths[1], "rule must match the header row");
+    }
+
+    #[test]
+    fn truncated_cell_keeps_its_text_and_adds_an_ellipsis() {
+        let out = r("| aaaaaaaaaaaaaaaaaaaaaa | b |\n|---|---|\n| c | d |", 20);
+        let header = out.lines().next().unwrap();
+        assert!(header.starts_with("aaa"), "cell text kept: {header:?}");
+        assert!(header.contains('…'), "ellipsis marks the cut: {header:?}");
     }
 }

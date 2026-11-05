@@ -58,7 +58,9 @@ Syntax highlighting, images, footnotes, reference-style links, setext
 headings, inline-HTML rendering, themes, config files, a built-in pager,
 CommonMark conformance. Line breaks inside a paragraph and inside a quote
 soft-wrap into one paragraph; a code block inside a list item flattens to
-indented text; a table too narrow for its content falls back to wrapped rows.
+indented text; a table wider than the render width shrinks its widest columns
+and truncates cells with `…`, and only a table that cannot fit three columns
+per cell falls back to wrapped rows.
 
 ## Layout
 

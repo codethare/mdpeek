@@ -47,6 +47,16 @@ pub fn parse_inline(src: &str) -> Vec<Span> {
             continue;
         }
         if c == '*' || c == '_' {
+            if chars.get(i + 1) == Some(&c)
+                && chars.get(i + 2) == Some(&c)
+                && let Some(end) = find_triple(&chars, i + 3, c)
+            {
+                flush(&mut out, &mut buf);
+                let inner: String = chars[i + 3..end].iter().collect();
+                push_styled(&mut out, &inner, style::BOLD.merge(style::ITALIC));
+                i = end + 3;
+                continue;
+            }
             if chars.get(i + 1) == Some(&c) {
                 if let Some(end) = find_double(&chars, i + 2, c) {
                     flush(&mut out, &mut buf);
@@ -60,11 +70,17 @@ pub fn parse_inline(src: &str) -> Vec<Span> {
                 i += 2;
                 continue;
             }
+            // An opener cannot start on whitespace: `2 * 3 * 4` is arithmetic,
+            // not emphasis.
+            let opens = chars.get(i + 1).is_some_and(|n| !n.is_whitespace());
             let intra_word = c == '_'
                 && i > 0
                 && chars[i - 1].is_alphanumeric()
                 && chars.get(i + 1).is_some_and(|n| n.is_alphanumeric());
-            if !intra_word && let Some(end) = find_char(&chars, i + 1, c) {
+            if opens
+                && !intra_word
+                && let Some(end) = find_char(&chars, i + 1, c)
+            {
                 flush(&mut out, &mut buf);
                 let inner: String = chars[i + 1..end].iter().collect();
                 push_styled(&mut out, &inner, style::ITALIC);
@@ -175,6 +191,22 @@ fn find_char(chars: &[char], from: usize, target: char) -> Option<usize> {
     None
 }
 
+/// `***bold italic***` closer: three of `c` in a row.
+fn find_triple(chars: &[char], from: usize, c: char) -> Option<usize> {
+    let mut i = from;
+    while i + 2 < chars.len() {
+        if chars[i] == '\\' {
+            i += 2;
+            continue;
+        }
+        if chars[i] == c && chars[i + 1] == c && chars[i + 2] == c {
+            return Some(i);
+        }
+        i += 1;
+    }
+    None
+}
+
 fn find_double(chars: &[char], from: usize, c: char) -> Option<usize> {
     let mut i = from;
     while i + 1 < chars.len() {
@@ -277,5 +309,15 @@ mod tests {
     #[test]
     fn empty_input_is_no_spans() {
         assert!(parse_inline("").is_empty());
+    }
+
+    #[test]
+    fn triple_star_is_bold_italic() {
+        assert_eq!(s("***x***"), vec![("x".into(), BOLD.merge(ITALIC))]);
+    }
+
+    #[test]
+    fn spaced_asterisks_stay_literal() {
+        assert_eq!(s("2 * 3 * 4"), vec![t("2 * 3 * 4")]);
     }
 }

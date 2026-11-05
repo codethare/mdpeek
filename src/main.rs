@@ -76,20 +76,39 @@ pub fn usage() -> &'static str {
     "usage: md [file...]\n\n  --width N    render width (default: terminal width, else 80)\n  --no-color   disable escapes (also honours NO_COLOR)\n"
 }
 
+fn read_stdin() -> Result<String, String> {
+    let mut buf = String::new();
+    io::stdin()
+        .read_to_string(&mut buf)
+        .map_err(|e| format!("stdin: {e}"))?;
+    Ok(buf)
+}
+
+/// Files are concatenated in the order given; `-` stands for stdin at that
+/// position, so `md CHANGES.md -` appends the piped text instead of dropping
+/// the file.
 fn read_input(files: &[String]) -> Result<String, String> {
-    if files.is_empty() || files.iter().any(|f| f == "-") {
-        let mut buf = String::new();
-        io::stdin()
-            .read_to_string(&mut buf)
-            .map_err(|e| format!("stdin: {e}"))?;
-        return Ok(buf);
+    if files.is_empty() {
+        return read_stdin();
     }
     let mut out = String::new();
+    let mut stdin_read = false;
     for path in files {
-        let text = fs::read_to_string(path).map_err(|e| format!("{path}: {e}"))?;
-        out.push_str(&text);
-        if !text.ends_with('\n') {
+        let text = if path == "-" {
+            if stdin_read {
+                String::new()
+            } else {
+                stdin_read = true;
+                read_stdin()?
+            }
+        } else {
+            fs::read_to_string(path).map_err(|e| format!("{path}: {e}"))?
+        };
+        if !text.is_empty() && !text.ends_with('\n') {
+            out.push_str(&text);
             out.push('\n');
+        } else {
+            out.push_str(&text);
         }
     }
     Ok(out)

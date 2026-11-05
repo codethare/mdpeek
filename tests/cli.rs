@@ -49,3 +49,28 @@ fn unknown_flag_exits_two() {
     let out = bin().arg("--nope").output().unwrap();
     assert_eq!(out.status.code(), Some(2));
 }
+
+#[test]
+fn dash_keeps_the_named_files_too() {
+    let dir = std::env::temp_dir().join(format!("md-cli-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("a.md");
+    std::fs::write(&file, "from file\n").unwrap();
+    let mut child = bin()
+        .arg(&file)
+        .arg("-")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .as_mut()
+        .unwrap()
+        .write_all(b"from stdin\n")
+        .unwrap();
+    let out = child.wait_with_output().unwrap();
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(text.contains("from file"), "named file kept: {text:?}");
+    assert!(text.contains("from stdin"), "stdin kept: {text:?}");
+}
