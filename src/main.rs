@@ -1,6 +1,8 @@
 #![allow(dead_code)]
 
+mod block;
 mod inline;
+mod render;
 mod style;
 mod wrap;
 
@@ -120,7 +122,9 @@ fn main() {
             exit(1);
         }
     };
-    // Consumed by the render pipeline in Task 5.
-    let _ = (width, color);
-    print!("{input}");
+    let ctx = render::Ctx { width, color };
+    print!(
+        "{}",
+        render::render_blocks(&block::parse_blocks(&input), &ctx)
+    );
 }
