@@ -1,3 +1,7 @@
+#![allow(dead_code)]
+
+mod style;
+
 use std::env;
 use std::fs;
 use std::io::{self, IsTerminal, Read};
