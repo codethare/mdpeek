@@ -63,7 +63,24 @@ fn render_block(block: &Block, ctx: &Ctx) -> String {
             }
             out
         }
-        Block::Quote(inner) => render_blocks(inner, ctx),
+        Block::Quote(inner) => {
+            let inner_ctx = Ctx {
+                width: ctx.width.saturating_sub(2).max(1),
+                color: ctx.color,
+            };
+            let rendered = render_blocks(inner, &inner_ctx);
+            let mut out = String::new();
+            for line in rendered.lines() {
+                let text = if line.is_empty() {
+                    "│".to_string()
+                } else {
+                    format!("│ {line}")
+                };
+                out.push_str(&style::QUOTE.apply(&text, ctx.color));
+                out.push('\n');
+            }
+            out
+        }
         Block::Rule => {
             let rule = "─".repeat(ctx.width);
             let mut out = style::RULE.apply(&rule, ctx.color);
@@ -201,5 +218,23 @@ mod tests {
     #[test]
     fn empty_code_block_renders_nothing() {
         assert_eq!(r("```\n```", 40), "");
+    }
+
+    #[test]
+    fn quote_gets_a_gutter() {
+        assert_eq!(r("> one\n> two", 20), "\u{2502} one two\n");
+    }
+
+    #[test]
+    fn quote_wraps_inside_the_gutter() {
+        assert_eq!(
+            r("> alpha beta gamma", 10),
+            "\u{2502} alpha\n\u{2502} beta\n\u{2502} gamma\n"
+        );
+    }
+
+    #[test]
+    fn nested_quote_doubles_the_gutter() {
+        assert_eq!(r("> > deep", 20), "\u{2502} \u{2502} deep\n");
     }
 }

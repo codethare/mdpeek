@@ -50,6 +50,21 @@ pub fn parse_blocks(src: &str) -> Vec<Block> {
             blocks.push(Block::Rule);
             continue;
         }
+        if let Some(stripped) = strip_quote(line) {
+            flush(&mut blocks, &mut para);
+            let mut inner: Vec<String> = vec![stripped];
+            while i < lines.len() {
+                match strip_quote(lines[i]) {
+                    Some(next) => {
+                        inner.push(next);
+                        i += 1;
+                    }
+                    None => break,
+                }
+            }
+            blocks.push(Block::Quote(parse_blocks(&inner.join("\n"))));
+            continue;
+        }
         if let Some((fence_char, fence_len)) = fence(line) {
             flush(&mut blocks, &mut para);
             let mut code: Vec<String> = Vec::new();
@@ -130,6 +145,16 @@ fn is_rule(line: &str) -> bool {
 
 fn indent_of(line: &str) -> usize {
     line.chars().take_while(|c| *c == ' ').count()
+}
+
+/// `> quoted`, up to three leading spaces, with the marker and one following
+/// space removed. `None` when the line is not part of a quote.
+fn strip_quote(line: &str) -> Option<String> {
+    if indent_of(line) > 3 {
+        return None;
+    }
+    let rest = line.trim_start().strip_prefix('>')?;
+    Some(rest.strip_prefix(' ').unwrap_or(rest).to_string())
 }
 
 /// An opening fence: three or more backticks or tildes. The info string is
@@ -426,6 +451,33 @@ mod tests {
             vec![Block::Code {
                 lines: vec!["# not a heading".into()]
             }]
+        );
+    }
+
+    #[test]
+    fn quote_lines_become_a_nested_block_list() {
+        assert_eq!(
+            parse_blocks("> one\n> two"),
+            vec![Block::Quote(vec![Block::Para("one two".into())])]
+        );
+    }
+
+    #[test]
+    fn quote_can_hold_other_blocks() {
+        assert_eq!(
+            parse_blocks("> # T\n> - a"),
+            vec![Block::Quote(vec![
+                Block::Heading {
+                    level: 1,
+                    text: "T".into()
+                },
+                Block::List(vec![ListItem {
+                    marker: "-".into(),
+                    indent: 0,
+                    checked: None,
+                    text: "a".into()
+                }]),
+            ])]
         );
     }
 }
