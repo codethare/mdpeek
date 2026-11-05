@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 mod block;
 mod inline;
 mod render;

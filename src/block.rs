@@ -79,6 +79,18 @@ pub fn parse_blocks(src: &str) -> Vec<Block> {
             blocks.push(Block::Code { lines: code });
             continue;
         }
+        if is_table_header(&lines, i, line) {
+            flush(&mut blocks, &mut para);
+            let header = split_row(line);
+            i += 1;
+            let mut rows: Vec<Vec<String>> = Vec::new();
+            while i < lines.len() && !lines[i].trim().is_empty() && lines[i].contains('|') {
+                rows.push(split_row(lines[i]));
+                i += 1;
+            }
+            blocks.push(Block::Table { header, rows });
+            continue;
+        }
         if let Some(first) = item_start(line) {
             flush(&mut blocks, &mut para);
             let mut items = vec![first];
@@ -176,6 +188,30 @@ fn is_closing_fence(line: &str, c: char, open_len: usize) -> bool {
     let trimmed = line.trim();
     let run = trimmed.chars().take_while(|ch| *ch == c).count();
     run >= open_len && run == trimmed.chars().count()
+}
+
+/// `header` is a table row when the line after it is a `---`-style separator
+/// row containing at least one pipe.
+fn is_table_header(lines: &[&str], separator: usize, header: &str) -> bool {
+    if !header.contains('|') {
+        return false;
+    }
+    let Some(sep) = lines.get(separator) else {
+        return false;
+    };
+    sep.contains('|')
+        && sep.contains('-')
+        && sep.chars().all(|c| matches!(c, ' ' | '|' | ':' | '-'))
+}
+
+fn split_row(line: &str) -> Vec<String> {
+    let trimmed = line.trim();
+    let trimmed = trimmed.strip_prefix('|').unwrap_or(trimmed);
+    let trimmed = trimmed.strip_suffix('|').unwrap_or(trimmed);
+    trimmed
+        .split('|')
+        .map(|cell| cell.trim().to_string())
+        .collect()
 }
 
 /// `- item`, `* item`, `+ item`, `1. item` or `1) item`, optionally with a
@@ -479,5 +515,21 @@ mod tests {
                 }]),
             ])]
         );
+    }
+
+    #[test]
+    fn pipe_table_with_separator_row() {
+        assert_eq!(
+            parse_blocks("| a | b |\n|---|---|\n| 1 | 22 |"),
+            vec![Block::Table {
+                header: vec!["a".into(), "b".into()],
+                rows: vec![vec!["1".into(), "22".into()]],
+            }]
+        );
+    }
+
+    #[test]
+    fn pipes_without_a_separator_row_stay_a_paragraph() {
+        assert_eq!(parse_blocks("a | b"), vec![Block::Para("a | b".into())]);
     }
 }

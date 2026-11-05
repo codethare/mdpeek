@@ -1,5 +1,5 @@
 use crate::block::Block;
-use crate::inline::parse_inline;
+use crate::inline::{Span, parse_inline};
 use crate::style::{self, Style};
 use crate::wrap::{display_width, wrap_spans};
 
@@ -87,16 +87,133 @@ fn render_block(block: &Block, ctx: &Ctx) -> String {
             out.push('\n');
             out
         }
-        Block::Table { header, rows } => {
-            let mut out = String::new();
-            let all = std::iter::once(header).chain(rows.iter());
-            for row in all {
-                out.push_str(&row.join(" | "));
-                out.push('\n');
-            }
-            out
+        Block::Table { header, rows } => render_table(header, rows, ctx),
+    }
+}
+
+fn render_table(header: &[String], rows: &[Vec<String>], ctx: &Ctx) -> String {
+    let cols = header
+        .len()
+        .max(rows.iter().map(Vec::len).max().unwrap_or(0));
+    if cols == 0 {
+        return String::new();
+    }
+    let mut widths = vec![0usize; cols];
+    for (idx, cell) in header.iter().enumerate() {
+        widths[idx] = widths[idx].max(cell_width(cell));
+    }
+    for row in rows {
+        for (idx, cell) in row.iter().enumerate().take(cols) {
+            widths[idx] = widths[idx].max(cell_width(cell));
         }
     }
+    let gaps = 3 * (cols - 1);
+    loop {
+        let total: usize = widths.iter().sum::<usize>() + gaps;
+        if total <= ctx.width {
+            break;
+        }
+        let Some(widest) = (0..cols).max_by_key(|idx| widths[*idx]) else {
+            break;
+        };
+        if widths[widest] <= 3 {
+            break;
+        }
+        widths[widest] -= 1;
+    }
+    let fits = widths.iter().sum::<usize>() + gaps <= ctx.width;
+    let mut out = String::new();
+    if !fits {
+        // Too narrow to lay out as columns: wrap the rows as plain text, which
+        // keeps the width invariant true for any input.
+        for (n, row) in std::iter::once(header)
+            .chain(rows.iter().map(Vec::as_slice))
+            .enumerate()
+        {
+            if n == 1 {
+                out.push('\n');
+            }
+            out.push_str(&render_text(
+                &row.join(" │ "),
+                Style::default(),
+                ctx,
+                "",
+                "",
+            ));
+        }
+        return out;
+    }
+    out.push_str(&render_row(header, &widths, style::TABLE_HEAD, ctx));
+    out.push('\n');
+    let separator: Vec<String> = widths.iter().map(|w| "─".repeat(w + 2)).collect();
+    out.push_str(&separator.join("┼"));
+    out.push('\n');
+    for row in rows {
+        out.push_str(&render_row(row, &widths, Style::default(), ctx));
+        out.push('\n');
+    }
+    out
+}
+
+fn cell_width(cell: &str) -> usize {
+    parse_inline(cell)
+        .iter()
+        .map(|span| display_width(&span.text))
+        .sum()
+}
+
+fn render_row(cells: &[String], widths: &[usize], base: Style, ctx: &Ctx) -> String {
+    let last = widths.len().saturating_sub(1);
+    let mut parts: Vec<String> = Vec::new();
+    for (idx, width) in widths.iter().enumerate() {
+        let cell = cells.get(idx).map_or("", String::as_str);
+        let (runs, truncated, used) = clamp_spans(&parse_inline(cell), *width);
+        let mut text = String::new();
+        for run in runs {
+            text.push_str(&base.merge(run.style).apply(&run.text, ctx.color));
+        }
+        if truncated {
+            text.push('…');
+        }
+        if idx != last {
+            text.push_str(&" ".repeat(width.saturating_sub(used)));
+        }
+        parts.push(text);
+    }
+    parts.join(" │ ")
+}
+
+/// Cut spans down to `width` columns, reserving one column for the ellipsis
+/// when the text has to be shortened.
+fn clamp_spans(spans: &[Span], width: usize) -> (Vec<Span>, bool, usize) {
+    let full: usize = spans.iter().map(|span| display_width(&span.text)).sum();
+    let truncated = full > width;
+    let limit = if truncated {
+        width.saturating_sub(1)
+    } else {
+        width
+    };
+    let mut out: Vec<Span> = Vec::new();
+    let mut used = 0;
+    'outer: for span in spans {
+        let mut text = String::new();
+        for ch in span.text.chars() {
+            let w = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
+            if used + w > limit {
+                break 'outer;
+            }
+            used += w;
+            text.push(ch);
+        }
+        out.push(Span {
+            text,
+            style: span.style,
+        });
+    }
+    if truncated {
+        used += 1;
+    }
+    (out, truncated, used)
 }
 
 /// Wrap `text` and paint it. `base` styles the whole block; a span's own style
@@ -236,5 +353,30 @@ mod tests {
     #[test]
     fn nested_quote_doubles_the_gutter() {
         assert_eq!(r("> > deep", 20), "\u{2502} \u{2502} deep\n");
+    }
+
+    #[test]
+    fn table_pads_columns_and_underlines_the_header() {
+        assert_eq!(
+            r("| a | b |\n|---|---|\n| 1 | 22 |", 40),
+            "a │ b\n───┼────\n1 │ 22\n"
+        );
+    }
+
+    #[test]
+    fn table_width_counts_wide_chars() {
+        assert_eq!(
+            r("| 中 | b |\n|---|---|\n| x | y |", 40),
+            "中 │ b\n────┼───\nx  │ y\n"
+        );
+    }
+
+    #[test]
+    fn table_is_clamped_to_the_render_width() {
+        let out = r("| aaaa | bbbb |\n|---|---|\n| cccc | dddd |", 8);
+        assert!(
+            out.lines().all(|l| crate::wrap::display_width(l) <= 8),
+            "got {out:?}"
+        );
     }
 }
