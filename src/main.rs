@@ -2,6 +2,7 @@
 
 mod inline;
 mod style;
+mod wrap;
 
 use std::env;
 use std::fs;
