@@ -50,6 +50,37 @@ pub fn parse_blocks(src: &str) -> Vec<Block> {
             blocks.push(Block::Rule);
             continue;
         }
+        if let Some(first) = item_start(line) {
+            flush(&mut blocks, &mut para);
+            let mut items = vec![first];
+            loop {
+                let indent = items.last().map_or(0, |item| item.indent);
+                while i < lines.len() && is_continuation(&lines, i, indent) {
+                    if let Some(item) = items.last_mut()
+                        && !item.text.is_empty()
+                    {
+                        item.text.push(' ');
+                        item.text.push_str(lines[i].trim());
+                    }
+                    i += 1;
+                }
+                // A blank line between items keeps the list going.
+                let mut next = i;
+                while next < lines.len() && lines[next].trim().is_empty() {
+                    next += 1;
+                }
+                if next < lines.len()
+                    && let Some(item) = item_start(lines[next])
+                {
+                    items.push(item);
+                    i = next + 1;
+                    continue;
+                }
+                break;
+            }
+            blocks.push(Block::List(items));
+            continue;
+        }
         if !para.is_empty() {
             para.push(' ');
         }
@@ -81,6 +112,75 @@ fn is_rule(line: &str) -> bool {
     compact.len() >= 3
         && matches!(compact[0], '-' | '*' | '_')
         && compact.iter().all(|c| *c == compact[0])
+}
+
+fn indent_of(line: &str) -> usize {
+    line.chars().take_while(|c| *c == ' ').count()
+}
+
+/// `- item`, `* item`, `+ item`, `1. item` or `1) item`, optionally with a
+/// `[ ]`/`[x]` task box after the marker.
+fn item_start(line: &str) -> Option<ListItem> {
+    let indent = indent_of(line);
+    let rest = &line[indent..];
+    let (marker, after) = bullet(rest).or_else(|| ordered(rest))?;
+    let mut text = after.trim_start();
+    let mut checked = None;
+    match text.get(..3).map(str::to_ascii_lowercase).as_deref() {
+        Some("[ ]") => {
+            checked = Some(false);
+            text = text[3..].trim_start();
+        }
+        Some("[x]") => {
+            checked = Some(true);
+            text = text[3..].trim_start();
+        }
+        _ => {}
+    }
+    Some(ListItem {
+        marker,
+        indent,
+        checked,
+        text: text.to_string(),
+    })
+}
+
+fn bullet(rest: &str) -> Option<(String, &str)> {
+    let c = rest.chars().next()?;
+    if !matches!(c, '-' | '*' | '+') {
+        return None;
+    }
+    let after = &rest[c.len_utf8()..];
+    let text = after.strip_prefix(' ')?;
+    Some((c.to_string(), text))
+}
+
+fn ordered(rest: &str) -> Option<(String, &str)> {
+    let digits: String = rest.chars().take_while(char::is_ascii_digit).collect();
+    if digits.is_empty() || digits.len() > 9 {
+        return None;
+    }
+    let after = &rest[digits.len()..];
+    let sep = after.chars().next()?;
+    if !matches!(sep, '.' | ')') {
+        return None;
+    }
+    let text = after[1..].strip_prefix(' ')?;
+    Some((format!("{digits}{sep}"), text))
+}
+
+/// A line belonging to the item above it: indented past the marker and not the
+/// start of another block.
+fn is_continuation(lines: &[&str], i: usize, item_indent: usize) -> bool {
+    let line = lines[i];
+    if line.trim().is_empty()
+        || item_start(line).is_some()
+        || heading(line).is_some()
+        || is_rule(line)
+    {
+        return false;
+    }
+    indent_of(line) > item_indent
 }
 
 fn flush(blocks: &mut Vec<Block>, para: &mut String) {
@@ -158,6 +258,103 @@ mod tests {
         assert_eq!(
             parse_blocks("####### x"),
             vec![Block::Para("####### x".into())]
+        );
+    }
+
+    #[test]
+    fn unordered_items() {
+        assert_eq!(
+            parse_blocks("- one\n- two"),
+            vec![Block::List(vec![
+                ListItem {
+                    marker: "-".into(),
+                    indent: 0,
+                    checked: None,
+                    text: "one".into()
+                },
+                ListItem {
+                    marker: "-".into(),
+                    indent: 0,
+                    checked: None,
+                    text: "two".into()
+                },
+            ])]
+        );
+    }
+
+    #[test]
+    fn ordered_markers_are_kept_as_written() {
+        assert_eq!(
+            parse_blocks("1. one\n2. two"),
+            vec![Block::List(vec![
+                ListItem {
+                    marker: "1.".into(),
+                    indent: 0,
+                    checked: None,
+                    text: "one".into()
+                },
+                ListItem {
+                    marker: "2.".into(),
+                    indent: 0,
+                    checked: None,
+                    text: "two".into()
+                },
+            ])]
+        );
+    }
+
+    #[test]
+    fn nesting_is_recorded_as_indent() {
+        assert_eq!(
+            parse_blocks("- one\n  - two"),
+            vec![Block::List(vec![
+                ListItem {
+                    marker: "-".into(),
+                    indent: 0,
+                    checked: None,
+                    text: "one".into()
+                },
+                ListItem {
+                    marker: "-".into(),
+                    indent: 2,
+                    checked: None,
+                    text: "two".into()
+                },
+            ])]
+        );
+    }
+
+    #[test]
+    fn task_items_carry_their_state() {
+        assert_eq!(
+            parse_blocks("- [x] done\n- [ ] todo"),
+            vec![Block::List(vec![
+                ListItem {
+                    marker: "-".into(),
+                    indent: 0,
+                    checked: Some(true),
+                    text: "done".into()
+                },
+                ListItem {
+                    marker: "-".into(),
+                    indent: 0,
+                    checked: Some(false),
+                    text: "todo".into()
+                },
+            ])]
+        );
+    }
+
+    #[test]
+    fn continuation_lines_belong_to_the_item() {
+        assert_eq!(
+            parse_blocks("- one\n  more"),
+            vec![Block::List(vec![ListItem {
+                marker: "-".into(),
+                indent: 0,
+                checked: None,
+                text: "one more".into()
+            }])]
         );
     }
 }

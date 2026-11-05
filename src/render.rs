@@ -1,7 +1,7 @@
 use crate::block::Block;
 use crate::inline::parse_inline;
 use crate::style::{self, Style};
-use crate::wrap::wrap_spans;
+use crate::wrap::{display_width, wrap_spans};
 
 pub struct Ctx {
     pub width: usize,
@@ -43,10 +43,22 @@ fn render_block(block: &Block, ctx: &Ctx) -> String {
         Block::List(items) => {
             let mut out = String::new();
             for item in items {
-                out.push_str(&item.marker);
-                out.push(' ');
-                out.push_str(&item.text);
-                out.push('\n');
+                let mut marker = " ".repeat(item.indent);
+                marker.push_str(&item.marker);
+                marker.push(' ');
+                match item.checked {
+                    Some(true) => marker.push_str("[x] "),
+                    Some(false) => marker.push_str("[ ] "),
+                    None => {}
+                }
+                let pad = " ".repeat(display_width(&marker));
+                out.push_str(&render_text(
+                    &item.text,
+                    Style::default(),
+                    ctx,
+                    &marker,
+                    &pad,
+                ));
             }
             out
         }
@@ -139,5 +151,29 @@ mod tests {
     #[test]
     fn heading_text_still_wraps() {
         assert_eq!(r("# alpha beta", 6), "alpha\nbeta\n");
+    }
+
+    #[test]
+    fn items_keep_their_markers() {
+        assert_eq!(r("- one\n- two", 20), "- one\n- two\n");
+        assert_eq!(r("1. one\n2. two", 20), "1. one\n2. two\n");
+    }
+
+    #[test]
+    fn nested_items_indent() {
+        assert_eq!(r("- one\n  - two", 20), "- one\n  - two\n");
+    }
+
+    #[test]
+    fn task_items_render_checkboxes() {
+        assert_eq!(r("- [x] done\n- [ ] todo", 20), "- [x] done\n- [ ] todo\n");
+    }
+
+    #[test]
+    fn item_text_wraps_under_the_marker() {
+        assert_eq!(
+            r("- alpha beta gamma delta", 12),
+            "- alpha beta\n  gamma\n  delta\n"
+        );
     }
 }
