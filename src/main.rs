@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+mod inline;
 mod style;
 
 use std::env;
