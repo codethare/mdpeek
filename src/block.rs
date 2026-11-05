@@ -112,6 +112,7 @@ pub fn parse_blocks(src: &str) -> Vec<Block> {
                 }
                 if next < lines.len()
                     && let Some(item) = item_start(lines[next])
+                    && ordered_marker(&item.marker) == ordered_marker(&items[0].marker)
                 {
                     items.push(item);
                     i = next + 1;
@@ -239,6 +240,10 @@ fn item_start(line: &str) -> Option<ListItem> {
         checked,
         text: text.to_string(),
     })
+}
+
+fn ordered_marker(marker: &str) -> bool {
+    marker.chars().next().is_some_and(|c| c.is_ascii_digit())
 }
 
 fn bullet(rest: &str) -> Option<(String, &str)> {
@@ -531,5 +536,26 @@ mod tests {
     #[test]
     fn pipes_without_a_separator_row_stay_a_paragraph() {
         assert_eq!(parse_blocks("a | b"), vec![Block::Para("a | b".into())]);
+    }
+
+    #[test]
+    fn bullet_and_ordered_items_are_separate_lists() {
+        assert_eq!(
+            parse_blocks("- a\n\n1. b"),
+            vec![
+                Block::List(vec![ListItem {
+                    marker: "-".into(),
+                    indent: 0,
+                    checked: None,
+                    text: "a".into()
+                }]),
+                Block::List(vec![ListItem {
+                    marker: "1.".into(),
+                    indent: 0,
+                    checked: None,
+                    text: "b".into()
+                }]),
+            ]
+        );
     }
 }
