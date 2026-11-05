@@ -35,7 +35,8 @@ fn render_block(block: &Block, ctx: &Ctx) -> String {
         Block::Code { lines } => {
             let mut out = String::new();
             for line in lines {
-                out.push_str(line);
+                let text = format!("  {line}");
+                out.push_str(&style::CODE_BLOCK.apply(&text, ctx.color));
                 out.push('\n');
             }
             out
@@ -175,5 +176,30 @@ mod tests {
             r("- alpha beta gamma delta", 12),
             "- alpha beta\n  gamma\n  delta\n"
         );
+    }
+
+    #[test]
+    fn code_lines_are_indented_and_unwrapped() {
+        assert_eq!(
+            r("```\naaaa bbbb cccc dddd\n```", 8),
+            "  aaaa bbbb cccc dddd\n"
+        );
+    }
+
+    #[test]
+    fn code_block_is_dim_when_colour_is_on() {
+        let out = render_blocks(
+            &parse_blocks("```\nx\n```"),
+            &Ctx {
+                width: 40,
+                color: true,
+            },
+        );
+        assert_eq!(out, "\x1b[2m  x\x1b[0m\n");
+    }
+
+    #[test]
+    fn empty_code_block_renders_nothing() {
+        assert_eq!(r("```\n```", 40), "");
     }
 }

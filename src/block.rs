@@ -50,6 +50,20 @@ pub fn parse_blocks(src: &str) -> Vec<Block> {
             blocks.push(Block::Rule);
             continue;
         }
+        if let Some((fence_char, fence_len)) = fence(line) {
+            flush(&mut blocks, &mut para);
+            let mut code: Vec<String> = Vec::new();
+            while i < lines.len() {
+                let inner = lines[i];
+                i += 1;
+                if is_closing_fence(inner, fence_char, fence_len) {
+                    break;
+                }
+                code.push(inner.to_string());
+            }
+            blocks.push(Block::Code { lines: code });
+            continue;
+        }
         if let Some(first) = item_start(line) {
             flush(&mut blocks, &mut para);
             let mut items = vec![first];
@@ -116,6 +130,27 @@ fn is_rule(line: &str) -> bool {
 
 fn indent_of(line: &str) -> usize {
     line.chars().take_while(|c| *c == ' ').count()
+}
+
+/// An opening fence: three or more backticks or tildes. The info string is
+/// discarded, since there is no syntax highlighting.
+fn fence(line: &str) -> Option<(char, usize)> {
+    let trimmed = line.trim_start();
+    let c = trimmed.chars().next()?;
+    if c != '`' && c != '~' {
+        return None;
+    }
+    let run = trimmed.chars().take_while(|ch| *ch == c).count();
+    if run < 3 {
+        return None;
+    }
+    Some((c, run))
+}
+
+fn is_closing_fence(line: &str, c: char, open_len: usize) -> bool {
+    let trimmed = line.trim();
+    let run = trimmed.chars().take_while(|ch| *ch == c).count();
+    run >= open_len && run == trimmed.chars().count()
 }
 
 /// `- item`, `* item`, `+ item`, `1. item` or `1) item`, optionally with a
@@ -355,6 +390,42 @@ mod tests {
                 checked: None,
                 text: "one more".into()
             }])]
+        );
+    }
+
+    #[test]
+    fn fenced_code_is_verbatim() {
+        assert_eq!(
+            parse_blocks("```rust\nlet x = 1;\n\n  y();\n```"),
+            vec![Block::Code {
+                lines: vec!["let x = 1;".into(), "".into(), "  y();".into()]
+            }]
+        );
+    }
+
+    #[test]
+    fn tilde_fences_and_eof_closing() {
+        assert_eq!(
+            parse_blocks("~~~\na\n~~~"),
+            vec![Block::Code {
+                lines: vec!["a".into()]
+            }]
+        );
+        assert_eq!(
+            parse_blocks("```\nunclosed\n"),
+            vec![Block::Code {
+                lines: vec!["unclosed".into()]
+            }]
+        );
+    }
+
+    #[test]
+    fn markdown_inside_a_fence_is_not_parsed() {
+        assert_eq!(
+            parse_blocks("```\n# not a heading\n```"),
+            vec![Block::Code {
+                lines: vec!["# not a heading".into()]
+            }]
         );
     }
 }
