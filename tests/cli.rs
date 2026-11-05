@@ -2,14 +2,14 @@ use std::io::Write;
 use std::process::{Command, Stdio};
 
 fn bin() -> Command {
-    Command::new(env!("CARGO_BIN_EXE_md"))
+    Command::new(env!("CARGO_BIN_EXE_mdpeek"))
 }
 
 #[test]
 fn help_exits_zero() {
     let out = bin().arg("--help").output().unwrap();
     assert_eq!(out.status.code(), Some(0));
-    assert!(String::from_utf8_lossy(&out.stdout).contains("md [file...]"));
+    assert!(String::from_utf8_lossy(&out.stdout).contains("mdpeek [file...]"));
 }
 
 #[test]
@@ -52,7 +52,7 @@ fn unknown_flag_exits_two() {
 
 #[test]
 fn dash_keeps_the_named_files_too() {
-    let dir = std::env::temp_dir().join(format!("md-cli-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("mdpeek-cli-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let file = dir.join("a.md");
     std::fs::write(&file, "from file\n").unwrap();

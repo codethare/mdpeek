@@ -73,7 +73,7 @@ pub fn term_width() -> Option<usize> {
 }
 
 pub fn usage() -> &'static str {
-    "usage: md [file...]\n\n  --width N    render width (default: terminal width, else 80)\n  --no-color   disable escapes (also honours NO_COLOR)\n"
+    "usage: mdpeek [file...]\n\n  --width N    render width (default: terminal width, else 80)\n  --no-color   disable escapes (also honours NO_COLOR)\n"
 }
 
 fn read_stdin() -> Result<String, String> {
@@ -85,7 +85,7 @@ fn read_stdin() -> Result<String, String> {
 }
 
 /// Files are concatenated in the order given; `-` stands for stdin at that
-/// position, so `md CHANGES.md -` appends the piped text instead of dropping
+/// position, so `mdpeek CHANGES.md -` appends the piped text instead of dropping
 /// the file.
 fn read_input(files: &[String]) -> Result<String, String> {
     if files.is_empty() {
@@ -123,7 +123,7 @@ fn main() {
     let cli = match parse_args(&args) {
         Ok(cli) => cli,
         Err(msg) => {
-            eprintln!("md: {msg}\n\n{}", usage());
+            eprintln!("mdpeek: {msg}\n\n{}", usage());
             exit(2);
         }
     };
@@ -135,7 +135,7 @@ fn main() {
     let input = match read_input(&cli.files) {
         Ok(text) => text,
         Err(msg) => {
-            eprintln!("md: {msg}");
+            eprintln!("mdpeek: {msg}");
             exit(1);
         }
     };

@@ -1,8 +1,8 @@
-# md (terminal Markdown renderer) Implementation Plan
+# mdpeek (terminal Markdown renderer) Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ship `md`, a small fast Rust binary that renders a Markdown file as styled text in a terminal.
+**Goal:** Ship `mdpeek`, a small fast Rust binary that renders a Markdown file as styled text in a terminal.
 
 **Architecture:** Three-stage pipeline over a hand-written subset parser: lines → `Block` tree (`block.rs`), block text → styled `Span` list (`inline.rs`), spans → width-wrapped styled lines (`wrap.rs`) painted with 16-colour SGR by `render.rs`. `main.rs` only resolves CLI, input, width and colour, then drives the pipeline.
 
@@ -24,10 +24,10 @@
 
 ## Review Focus
 
-1. Output redirected to a file or a pipe must contain no escape byte — a user doing `md x.md > out.txt` gets clean text.
+1. Output redirected to a file or a pipe must contain no escape byte — a user doing `mdpeek x.md > out.txt` gets clean text.
 2. CJK and mixed-width text must never exceed the requested width; wide chars cost two columns.
 3. Malformed input (unclosed `**bold`, unclosed ``` fence at EOF, `|` with no separator row) must not panic or swallow the rest of the document.
-4. Empty file, whitespace-only file, and a bare `md` with stdin from `/dev/null` must exit 0 with no output.
+4. Empty file, whitespace-only file, and a bare `mdpeek` with stdin from `/dev/null` must exit 0 with no output.
 5. `--width 1`, `--width 0`, and a width smaller than an indent must not underflow or panic; the program clamps and keeps rendering.
 
 ---
@@ -39,7 +39,7 @@
 
 **Interfaces:**
 - Produces: `struct Cli { files: Vec<String>, width: Option<usize>, color: bool }`, `fn parse_args(args: &[String]) -> Result<Cli, String>`, `fn term_width() -> Option<usize>`, `fn usage() -> &'static str`.
-- Produces binary name `md`.
+- Produces binary name `mdpeek`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -50,14 +50,14 @@ use std::io::Write;
 use std::process::{Command, Stdio};
 
 fn bin() -> Command {
-    Command::new(env!("CARGO_BIN_EXE_md"))
+    Command::new(env!("CARGO_BIN_EXE_mdpeek"))
 }
 
 #[test]
 fn help_exits_zero() {
     let out = bin().arg("--help").output().unwrap();
     assert_eq!(out.status.code(), Some(0));
-    assert!(String::from_utf8_lossy(&out.stdout).contains("md [file...]"));
+    assert!(String::from_utf8_lossy(&out.stdout).contains("mdpeek [file...]"));
 }
 
 #[test]
@@ -100,13 +100,13 @@ fn unknown_flag_exits_two() {
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `cargo test --test cli`
-Expected: build error, `no bin target named md`.
+Expected: build error, `no bin target named mdpeek`.
 
 - [ ] **Step 3: Create `Cargo.toml`**
 
 ```toml
 [package]
-name = "md"
+name = "mdpeek"
 version = "0.1.0"
 edition = "2024"
 
@@ -138,7 +138,7 @@ pub fn term_width() -> Option<usize> {
 }
 
 pub fn usage() -> &'static str {
-    "usage: md [file...]\n\n  --width N    render width (default: terminal width, else 80)\n  --no-color   disable escapes (also honours NO_COLOR)\n"
+    "usage: mdpeek [file...]\n\n  --width N    render width (default: terminal width, else 80)\n  --no-color   disable escapes (also honours NO_COLOR)\n"
 }
 ```
 
@@ -155,7 +155,7 @@ Expected: 5 passed.
 
 ```bash
 cargo test && cargo clippy -- -D warnings && cargo fmt --check
-jj describe -m "feat: md binary skeleton with CLI, width and colour resolution"
+jj describe -m "feat: mdpeek binary skeleton with CLI, width and colour resolution"
 jj new
 ```
 
@@ -1005,7 +1005,7 @@ use std::process::Command;
 
 #[test]
 fn renders_the_fixture_without_escapes_and_within_width() {
-    let out = Command::new(env!("CARGO_BIN_EXE_md"))
+    let out = Command::new(env!("CARGO_BIN_EXE_mdpeek"))
         .arg("--width")
         .arg("60")
         .arg(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/sample.md"))
@@ -1021,7 +1021,7 @@ fn renders_the_fixture_without_escapes_and_within_width() {
 #[test]
 fn no_panic_on_hostile_widths() {
     for w in ["0", "1", "2"] {
-        let out = Command::new(env!("CARGO_BIN_EXE_md"))
+        let out = Command::new(env!("CARGO_BIN_EXE_mdpeek"))
             .arg("--width").arg(w)
             .arg(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/sample.md"))
             .output()
@@ -1033,7 +1033,7 @@ fn no_panic_on_hostile_widths() {
 #[test]
 fn hostile_markdown_does_not_panic() {
     let src = "**unclosed\n\n```\nunclosed fence\n\n| a |\n--- x\n\n> > > deep\n\n####### seven\n";
-    let mut child = Command::new(env!("CARGO_BIN_EXE_md"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_mdpeek"))
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
         .spawn()
@@ -1056,14 +1056,14 @@ Expected: FAIL (fixture missing, or escapes present).
 
 - [ ] **Step 4: Fix whatever the smoke test exposes, then write `README.md`**
 
-README states what `md` is, how to build (`cargo build --release`, binary at `target/release/md`), the CLI flags, the supported-construct table copied from the spec, and the known limits (no syntax highlighting, no footnotes, no reference links, no setext headings, code blocks inside list items flatten to text). It must not argue for any design decision.
+README states what `mdpeek` is, how to build (`cargo build --release`, binary at `target/release/mdpeek`), the CLI flags, the supported-construct table copied from the spec, and the known limits (no syntax highlighting, no footnotes, no reference links, no setext headings, code blocks inside list items flatten to text). It must not argue for any design decision.
 
 - [ ] **Step 5: Verify the size and speed gates**
 
 ```bash
 cargo build --release
-ls -l target/release/md
-/usr/bin/time -f "%e s" ./target/release/md tests/fixtures/sample.md > /dev/null
+ls -l target/release/mdpeek
+/usr/bin/time -f "%e s" ./target/release/mdpeek tests/fixtures/sample.md > /dev/null
 ```
 
 Expected: size under 1,000,000 bytes; wall time under 0.02 s. Record both numbers in the final report.

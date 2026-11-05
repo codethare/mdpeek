@@ -7,7 +7,7 @@ fn fixture() -> String {
 
 #[test]
 fn renders_the_fixture_without_escapes_and_within_width() {
-    let out = Command::new(env!("CARGO_BIN_EXE_md"))
+    let out = Command::new(env!("CARGO_BIN_EXE_mdpeek"))
         .arg("--width")
         .arg("60")
         .arg(fixture())
@@ -23,7 +23,7 @@ fn renders_the_fixture_without_escapes_and_within_width() {
 #[test]
 fn no_panic_on_hostile_widths() {
     for w in ["0", "1", "2"] {
-        let out = Command::new(env!("CARGO_BIN_EXE_md"))
+        let out = Command::new(env!("CARGO_BIN_EXE_mdpeek"))
             .arg("--width")
             .arg(w)
             .arg(fixture())
@@ -36,7 +36,7 @@ fn no_panic_on_hostile_widths() {
 #[test]
 fn hostile_markdown_does_not_panic() {
     let src = "**unclosed\n\n```\nunclosed fence\n\n| a |\n--- x\n\n> > > deep\n\n####### seven\n";
-    let mut child = Command::new(env!("CARGO_BIN_EXE_md"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_mdpeek"))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()

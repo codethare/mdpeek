@@ -1,29 +1,29 @@
-# md
+# mdpeek
 
 Renders a Markdown file as styled text in a terminal, so reading a README is
 nicer than `cat`. One static binary, two dependencies at build time, no runtime
 dependencies.
 
 ```text
-md README.md
-cat README.md | md
-md --width 100 README.md | less -R
+mdpeek README.md
+cat README.md | mdpeek
+mdpeek --width 100 README.md | less -R
 ```
 
 ## Build
 
 ```text
 cargo build --release
-install -m755 target/release/md ~/.local/bin/md
+install -m755 target/release/mdpeek ~/.local/bin/mdpeek
 ```
 
-Requires a Rust toolchain. The binary lands at `target/release/md` and is under
+Requires a Rust toolchain. The binary lands at `target/release/mdpeek` and is under
 1 MB.
 
 ## Usage
 
 ```text
-md [file...]
+mdpeek [file...]
 
   --width N    render width (default: terminal width, else 80)
   --no-color   disable escapes (also honours NO_COLOR)

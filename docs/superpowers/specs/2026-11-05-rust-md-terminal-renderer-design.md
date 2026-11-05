@@ -1,10 +1,10 @@
-# md — minimal terminal Markdown renderer (Rust)
+# mdpeek — minimal terminal Markdown renderer (Rust)
 
 ## Intent
 
 A small, fast command that prints a Markdown file styled for a terminal, so
-reading a README is nicer than `cat`. Used as `md README.md` or
-`cat x.md | md`.
+reading a README is nicer than `cat`. Used as `mdpeek README.md` or
+`cat x.md | mdpeek`.
 
 ## Goals
 
@@ -58,10 +58,10 @@ Release profile: `opt-level = "z"`, `lto = "fat"`, `codegen-units = 1`,
 ### CLI
 
 ```text
-md [file...]        # no args: read stdin; "-" also means stdin
-md --width N        # override render width
-md --no-color       # same as NO_COLOR=1
-md -h | --help
+mdpeek [file...]        # no args: read stdin; "-" also means stdin
+mdpeek --width N        # override render width
+mdpeek --no-color       # same as NO_COLOR=1
+mdpeek -h | --help
 ```
 
 Files are concatenated in order. Exit 0 on success, 1 on read error,
