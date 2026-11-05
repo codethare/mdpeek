@@ -24,10 +24,11 @@ fn render_block(block: &Block, ctx: &Ctx) -> String {
     match block {
         Block::Para(text) => render_text(text, Style::default(), ctx, "", ""),
         Block::Heading { level, text } => {
-            let base = if *level >= 4 {
-                style::H4
-            } else {
-                Style::default()
+            let base = match level {
+                1 => style::H1,
+                2 => style::H2,
+                3 => style::H3,
+                _ => style::H4,
             };
             render_text(text, base, ctx, "", "")
         }
@@ -50,7 +51,12 @@ fn render_block(block: &Block, ctx: &Ctx) -> String {
             out
         }
         Block::Quote(inner) => render_blocks(inner, ctx),
-        Block::Rule => String::new(),
+        Block::Rule => {
+            let rule = "─".repeat(ctx.width);
+            let mut out = style::RULE.apply(&rule, ctx.color);
+            out.push('\n');
+            out
+        }
         Block::Table { header, rows } => {
             let mut out = String::new();
             let all = std::iter::once(header).chain(rows.iter());
@@ -105,5 +111,33 @@ mod tests {
     #[test]
     fn empty_document_renders_nothing() {
         assert_eq!(r("", 80), "");
+    }
+
+    #[test]
+    fn headings_have_no_marker_text() {
+        assert_eq!(r("# Title", 40), "Title\n");
+        assert_eq!(r("### Deep", 40), "Deep\n");
+    }
+
+    #[test]
+    fn h1_is_styled_when_colour_is_on() {
+        let out = render_blocks(
+            &parse_blocks("# T"),
+            &Ctx {
+                width: 40,
+                color: true,
+            },
+        );
+        assert_eq!(out, "\x1b[1;4;94mT\x1b[0m\n");
+    }
+
+    #[test]
+    fn rule_spans_the_width() {
+        assert_eq!(r("---", 10), "──────────\n");
+    }
+
+    #[test]
+    fn heading_text_still_wraps() {
+        assert_eq!(r("# alpha beta", 6), "alpha\nbeta\n");
     }
 }
