@@ -70,8 +70,8 @@ Files are concatenated in order. Exit 0 on success, 1 on read error,
 ### Pipeline (two phases)
 
 1. **Blocks** — group lines into `Heading | Para | Code | List | Quote |
-   Table | Rule | Raw`. Block nesting (a list inside a quote inside a list) is
-   a tree, so an AST beats streaming line-by-line here.
+   Table | Rule`. Block nesting (a quote holding a list) is a tree, so an AST
+   beats streaming line-by-line here.
 2. **Inline** — split each text block into `Span { text, style }` over
    bold/italic/strike/code/link.
 3. **Render** — spans to wrapped, styled lines; width accounting in `wrap.rs`.
