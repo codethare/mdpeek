@@ -34,6 +34,7 @@ pkg/
 .pi-subagents/
 .codegraph/
 .codebase-index/
+.superpowers/
 
 # ── Editors / IDEs ───────────────────────────────────────────
 .vscode/
