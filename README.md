@@ -74,3 +74,7 @@ per cell falls back to wrapped rows.
   construct above
 
 Design and plan live in `docs/superpowers/`.
+
+## License
+
+MIT — see `LICENSE`.
