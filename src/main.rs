@@ -1,5 +1,6 @@
 mod block;
 mod inline;
+mod pager;
 mod render;
 mod style;
 mod wrap;
@@ -13,6 +14,7 @@ struct Cli {
     files: Vec<String>,
     width: Option<usize>,
     color: bool,
+    pager: bool,
 }
 
 fn parse_args(args: &[String]) -> Result<Cli, String> {
@@ -20,12 +22,14 @@ fn parse_args(args: &[String]) -> Result<Cli, String> {
         files: Vec::new(),
         width: None,
         color: true,
+        pager: false,
     };
     let mut i = 0;
     while i < args.len() {
         let arg = &args[i];
         match arg.as_str() {
             "--no-color" => cli.color = false,
+            "-p" | "--pager" => cli.pager = true,
             "--width" => {
                 i += 1;
                 let value = args.get(i).ok_or("--width needs a value")?;
@@ -73,7 +77,7 @@ pub fn term_width() -> Option<usize> {
 }
 
 pub fn usage() -> &'static str {
-    "usage: mdpeek [file...]\n\n  --width N    render width (default: terminal width, else 80)\n  --no-color   disable escapes (also honours NO_COLOR)\n"
+    "usage: mdpeek [file...]\n\n  --width N    render width (default: terminal width, else 80)\n  --no-color   disable escapes (also honours NO_COLOR)\n  -p, --pager  open the result in $PAGER (default: less -R)\n"
 }
 
 fn read_stdin() -> Result<String, String> {
@@ -140,8 +144,14 @@ fn main() {
         }
     };
     let ctx = render::Ctx { width, color };
-    print!(
-        "{}",
-        render::render_blocks(&block::parse_blocks(&input), &ctx)
-    );
+    let rendered = render::render_blocks(&block::parse_blocks(&input), &ctx);
+    if pager::wants_pager(cli.pager, io::stdout().is_terminal()) {
+        match pager::run(&pager::resolve_pager(env::var("PAGER").ok()), &rendered) {
+            Ok(code) if code != 0 => exit(code),
+            Ok(_) => {}
+            Err(_) => print!("{rendered}"),
+        }
+    } else {
+        print!("{rendered}");
+    }
 }

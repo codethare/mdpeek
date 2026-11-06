@@ -16,7 +16,7 @@ reading a README is nicer than `cat`. Used as `mdpeek README.md` or
 
 Syntax highlighting, images (sixel/kitty), footnotes, reference-style links,
 setext headings, inline-HTML rendering, themes, config files, plugins, a
-built-in pager, CommonMark conformance.
+built-in pager (`-p` delegates to `$PAGER` instead), CommonMark conformance.
 
 ## Anti-goals
 

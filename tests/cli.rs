@@ -74,3 +74,33 @@ fn dash_keeps_the_named_files_too() {
     assert!(text.contains("from file"), "named file kept: {text:?}");
     assert!(text.contains("from stdin"), "stdin kept: {text:?}");
 }
+
+#[test]
+fn pager_flag_is_ignored_when_stdout_is_not_a_tty() {
+    // PAGER would swallow the output if it ran; the document must survive.
+    let mut child = bin()
+        .arg("-p")
+        .env("PAGER", "/bin/false")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .as_mut()
+        .unwrap()
+        .write_all(b"# Title\n")
+        .unwrap();
+    let out = child.wait_with_output().unwrap();
+    assert_eq!(out.status.code(), Some(0));
+    assert!(String::from_utf8_lossy(&out.stdout).contains("Title"));
+}
+
+#[test]
+fn pager_flag_is_accepted_with_a_file() {
+    let out = bin()
+        .args(["--pager", "/nonexistent/x.md"])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(1), "read error still wins");
+}

@@ -27,10 +27,18 @@ mdpeek [file...]
 
   --width N    render width (default: terminal width, else 80)
   --no-color   disable escapes (also honours NO_COLOR)
+  -p, --pager  open the result in $PAGER (default: less -R)
 ```
 
 No file argument reads stdin; `-` also means stdin. Several files are rendered
-in order. Exit status: 0 success, 1 read error, 2 usage error.
+in order. Exit status: 0 success, 1 read error, 2 usage error, or the pager's
+own code when `-p` fails.
+
+`-p` is ignored when stdout is not a terminal, so `mdpeek -p x.md > out.txt`
+still writes the document. `$PAGER` is split on whitespace and run without a
+shell: no quoting, no aliases. A pager without `-R` will show escape codes, and
+setting `$PAGER=less` does that — use `less -R` or leave `$PAGER` unset. If the
+pager cannot be started at all, mdpeek prints the document itself.
 
 Colour is emitted only when stdout is a terminal and `NO_COLOR` is unset, so
 piping or redirecting gives plain text.
